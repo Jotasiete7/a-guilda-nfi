@@ -1,42 +1,71 @@
-// netlify/functions/get-anuncios.js
-exports.handler = async (event, context) => {
-  try {
-    const siteId = process.env.MY_SITE_ID;
-    const token = process.env.MY_NETLIFY_TOKEN;
+// anuncios.js - VERSÃO SIMPLES SEM FUNCTION
+const apiUrl = 'https://api.netlify.com/api/v1/forms/paginas-amarelas/submissions'; // API pública do Netlify Forms
 
-    if (!siteId || !token) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Variáveis de ambiente não configuradas' }),
-      };
+function criarCard(anuncio) {
+  const servicos = [];
+  for (let i = 1; i <= 3; i++) {
+    const cat = anuncio[`servico${i}_categoria`];
+    if (cat) {
+      const skill = anuncio[`servico${i}_skill`] || 'Serviço';
+      const ql = anuncio[`servico${i}_ql`] ? `${anuncio[`servico${i}_ql`]}QL` : '';
+      const preco = anuncio[`servico${i}_preco`] || '';
+      const icon = {
+        Wood: '🌲', Metal: '⚔️', Leather: '🛡️', Cloth: '👘', Services: '🔧'
+      }[cat] || '🔹';
+      servicos.push(`${icon} <strong>${skill}</strong> ${ql} – ${preco}`);
     }
-
-    const url = `https://api.netlify.com/api/v1/sites/${siteId}/forms/paginas-amarelas/submissions`;
-    
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error ${response.status}: ${errorText}`);
-    }
-
-    const submissions = await response.json();
-
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submissions.map(s => s.data)),
-    };
-  } catch (error) {
-    console.error('Erro na function:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
-    };
   }
-};
+
+  const planoBadge = anuncio.plano ? 
+    `<span class="plano">${anuncio.plano.toUpperCase()}</span>` : 
+    '<span class="plano">GRÁTIS</span>';
+
+  return `
+    <div class="card ${anuncio.plano || 'gratis'}">
+      <h3>${anuncio.nick} <small>(${anuncio.servidor})</small></h3>
+      <p><strong>Contato:</strong> ${anuncio.contato}</p>
+      <div class="servicos">${servicos.join('<br>')}</div>
+      ${anuncio.descricao ? `<p><em>${anuncio.descricao}</em></p>` : ''}
+      ${planoBadge}
+    </div>
+  `;
+}
+
+async function carregarAnuncios() {
+  const container = document.getElementById('lista-anuncios');
+  container.innerHTML = '<p>Carregando artesãos da guilda...</p>';
+
+  try {
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error(`Erro ${res.status}: API não disponível`);
+    const form = await res.json();
+    const submissions = form.submissions || [];
+
+    if (submissions.length === 0) {
+      container.innerHTML = '<p>Nenhum anúncio ainda. <a href="paginasamarelas.html">Cadastre-se!</a></p>';
+      return;
+    }
+
+    const anuncios = submissions.map(s => s.data);
+    container.innerHTML = anuncios.map(criarCard).join('');
+
+    // BUSCA EM TEMPO REAL
+    const busca = document.getElementById('busca');
+    if (busca) {
+      busca.addEventListener('input', (e) => {
+        const termo = e.target.value.toLowerCase();
+        const cards = container.querySelectorAll('.card');
+        cards.forEach(card => {
+          const texto = card.textContent.toLowerCase();
+          card.style.display = texto.includes(termo) ? 'block' : 'none';
+        });
+      });
+    }
+  } catch (err) {
+    console.error('Erro:', err);
+    container.innerHTML = '<p>Erro ao carregar anúncios. Verifique o console (F12).</p>';
+  }
+}
+
+// Inicia ao carregar
+document.addEventListener('DOMContentLoaded', carregarAnuncios);
