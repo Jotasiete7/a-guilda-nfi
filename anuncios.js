@@ -1,5 +1,5 @@
-// anuncios.js - VERSÃO SIMPLES SEM FUNCTION
-const apiUrl = 'https://api.netlify.com/api/v1/forms/paginas-amarelas/submissions'; // API pública do Netlify Forms
+// anuncios.js - CONSUMINDO API DO RENDER
+const apiUrl = 'https://guilda-backend.onrender.com/yellow';
 
 function criarCard(anuncio) {
   const servicos = [];
@@ -22,8 +22,8 @@ function criarCard(anuncio) {
 
   return `
     <div class="card ${anuncio.plano || 'gratis'}">
-      <h3>${anuncio.nick} <small>(${anuncio.servidor})</small></h3>
-      <p><strong>Contato:</strong> ${anuncio.contato}</p>
+      <h3>${anuncio.nick || 'Anônimo'} <small>(${anuncio.servidor || 'N/A'})</small></h3>
+      <p><strong>Contato:</strong> ${anuncio.contato || 'N/A'}</p>
       <div class="servicos">${servicos.join('<br>')}</div>
       ${anuncio.descricao ? `<p><em>${anuncio.descricao}</em></p>` : ''}
       ${planoBadge}
@@ -33,37 +33,34 @@ function criarCard(anuncio) {
 
 async function carregarAnuncios() {
   const container = document.getElementById('lista-anuncios');
-  container.innerHTML = '<p>Carregando artesãos da guilda...</p>';
+  container.innerHTML = '<p class="loading">Carregando artesãos da guilda...</p>';
 
   try {
     const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error(`Erro ${res.status}: API não disponível`);
-    const form = await res.json();
-    const submissions = form.submissions || [];
+    if (!res.ok) throw new Error(`Erro ${res.status}: ${res.statusText}`);
+    const anuncios = await res.json();
 
-    if (submissions.length === 0) {
+    if (!anuncios || anuncios.length === 0) {
       container.innerHTML = '<p>Nenhum anúncio ainda. <a href="paginasamarelas.html">Cadastre-se!</a></p>';
       return;
     }
 
-    const anuncios = submissions.map(s => s.data);
     container.innerHTML = anuncios.map(criarCard).join('');
 
-    // BUSCA EM TEMPO REAL
+    // Busca em tempo real
     const busca = document.getElementById('busca');
     if (busca) {
       busca.addEventListener('input', (e) => {
         const termo = e.target.value.toLowerCase();
         const cards = container.querySelectorAll('.card');
         cards.forEach(card => {
-          const texto = card.textContent.toLowerCase();
-          card.style.display = texto.includes(termo) ? 'block' : 'none';
+          card.style.display = card.textContent.toLowerCase().includes(termo) ? 'block' : 'none';
         });
       });
     }
   } catch (err) {
-    console.error('Erro:', err);
-    container.innerHTML = '<p>Erro ao carregar anúncios. Verifique o console (F12).</p>';
+    console.error('Erro ao carregar anúncios:', err);
+    container.innerHTML = '<p>Erro ao carregar anúncios. Verifique o backend ou console (F12).</p>';
   }
 }
 
