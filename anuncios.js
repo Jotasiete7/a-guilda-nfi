@@ -1,70 +1,42 @@
-// anuncios.js
-const apiUrl = '/.netlify/functions/get-anuncios';
-
-function criarCard(anuncio) {
-  const servicos = [];
-  for (let i = 1; i <= 3; i++) {
-    const cat = anuncio[`servico${i}_categoria`];
-    if (cat) {
-      const skill = anuncio[`servico${i}_skill`] || 'Serviço';
-      const ql = anuncio[`servico${i}_ql`] ? `${anuncio[`servico${i}_ql`]}QL` : '';
-      const preco = anuncio[`servico${i}_preco`] || '';
-      const icon = {
-        Wood: '🌲', Metal: '⚔️', Leather: '🛡️', Cloth: '👘', Services: '🔧'
-      }[cat] || '🔹';
-      servicos.push(`${icon} <strong>${skill}</strong> ${ql} – ${preco}`);
-    }
-  }
-
-  const planoBadge = anuncio.plano ? 
-    `<span class="plano">${anuncio.plano.toUpperCase()}</span>` : 
-    '<span class="plano">GRÁTIS</span>';
-
-  return `
-    <div class="card ${anuncio.plano || 'gratis'}">
-      <h3>${anuncio.nick} <small>(${anuncio.servidor})</small></h3>
-      <p><strong>Contato:</strong> ${anuncio.contato}</p>
-      <div class="servicos">${servicos.join('<br>')}</div>
-      ${anuncio.descricao ? `<p><em>${anuncio.descricao}</em></p>` : ''}
-      ${planoBadge}
-    </div>
-  `;
-}
-
-async function carregarAnuncios() {
-  const container = document.getElementById('lista-anuncios');
-  container.innerHTML = '<p>Carregando artesãos da guilda...</p>';
-
+// netlify/functions/get-anuncios.js
+exports.handler = async (event, context) => {
   try {
-    const res = await fetch(apiUrl);
-    if (!res.ok) throw new Error(`Erro ${res.status}`);
+    const siteId = process.env.MY_SITE_ID;
+    const token = process.env.MY_NETLIFY_TOKEN;
 
-    const anuncios = await res.json();
-
-    if (!anuncios || anuncios.length === 0) {
-      container.innerHTML = '<p>Nenhum anúncio ainda. <a href="paginasamarelas.html">Cadastre-se!</a></p>';
-      return;
+    if (!siteId || !token) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Variáveis de ambiente não configuradas' }),
+      };
     }
 
-    container.innerHTML = anuncios.map(criarCard).join('');
+    const url = `https://api.netlify.com/api/v1/sites/${siteId}/forms/paginas-amarelas/submissions`;
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-    // BUSCA EM TEMPO REAL
-    const busca = document.getElementById('busca');
-    if (busca) {
-      busca.addEventListener('input', (e) => {
-        const termo = e.target.value.toLowerCase();
-        const cards = container.querySelectorAll('.card');
-        cards.forEach(card => {
-          const texto = card.textContent.toLowerCase();
-          card.style.display = texto.includes(termo) ? 'block' : 'none';
-        });
-      });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error ${response.status}: ${errorText}`);
     }
-  } catch (err) {
-    console.error('Erro ao carregar anúncios:', err);
-    container.innerHTML = '<p>Erro ao carregar anúncios. Tente novamente.</p>';
+
+    const submissions = await response.json();
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(submissions.map(s => s.data)),
+    };
+  } catch (error) {
+    console.error('Erro na function:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message }),
+    };
   }
-}
-
-// Inicia ao carregar a página
-document.addEventListener('DOMContentLoaded', carregarAnuncios);
+};
